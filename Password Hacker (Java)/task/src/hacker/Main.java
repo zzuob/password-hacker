@@ -51,6 +51,8 @@ public class Main {
         return next.toString();
     }
 
+    // Get all possible case combinations from a lowercase string
+    // Returns a list with one entry for numeric strings
     private static List<String> getAllCaseCombinations(String text) {
         text = text.trim();
         List<String> combinations = new ArrayList<>();
@@ -65,42 +67,6 @@ public class Main {
             current = getNextCase(current, indexes);
         }
         return combinations;
-    }
-
-    @Deprecated
-    private static char nextChar(char current) {
-        if (current == 'z') current = '/';
-        current = (char) (current + 1);
-        return current;
-    }
-
-    @Deprecated
-    public static String generateNext(String text) {
-        int endIndex = text.length()-1;
-        char current = text.charAt(endIndex);
-        current = nextChar(current);
-        StringBuilder updated = new StringBuilder(text.substring(0, endIndex));
-        if (current != ':') updated.append(current);
-        else {
-            int index = endIndex-1;
-            updated.append('a');
-            while (true) {
-                if (index < 0) {
-                    updated.insert(0,'a');
-                    break;
-                }
-                current = updated.charAt(index);
-                current = nextChar(current);
-                if (current != ':') {
-                    updated.setCharAt(index, current);
-                    break;
-                } else {
-                    updated.setCharAt(index, 'a');
-                    index--;
-                }
-            }
-        }
-        return updated.toString();
     }
 
     public static void main(String[] args) throws IOException {
