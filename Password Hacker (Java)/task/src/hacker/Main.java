@@ -6,8 +6,11 @@ import java.io.IOException;
 import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+
+import static hacker.JSON.convertFromJSON;
+import static hacker.JSON.convertToJSON;
 
 public class Main {
 
@@ -20,54 +23,7 @@ public class Main {
         }
     }
 
-    private static boolean isLower(char current) {
-        return 'a' <= current && current <= 'z';
-    }
-    private static List<Integer> getLetterLocations(String text) {
-        List<Integer> indexes = new ArrayList<>();
-        for (int i = 0; i < text.length(); i++) {
-            char current = text.charAt(i);
-            if (isLower(current)) indexes.add(i);
-        }
-        return indexes;
-    }
 
-    private static char flipCase(char current) {
-        if (isLower(current)) return String.valueOf(current).toUpperCase().charAt(0);
-        else return String.valueOf(current).toLowerCase().charAt(0);
-    }
-
-    private static String getNextCase(String text, List<Integer> indexes) {
-        int currentIndex = indexes.size()-1;
-        StringBuilder next = new StringBuilder(text);
-        char current = 'a';
-        while (isLower(current)) {
-            if (currentIndex < 0) return "";
-            int index = indexes.get(currentIndex);
-            current = flipCase(next.charAt(index));
-            next.setCharAt(index, current);
-            currentIndex--;
-        }
-        return next.toString();
-    }
-
-    // Get all possible case combinations from a lowercase string
-    // Returns a list with one entry for numeric strings
-    private static List<String> getAllCaseCombinations(String text) {
-        text = text.trim();
-        List<String> combinations = new ArrayList<>();
-        List<Integer> indexes = getLetterLocations(text);
-        if (indexes.isEmpty()) {
-            combinations.add(text);
-            return combinations;
-        }
-        String current = text;
-        while (!"".equals(current)) {
-            combinations.add(current);
-            current = getNextCase(current, indexes);
-        }
-        return combinations;
-    }
 
     public static void main(String[] args) throws IOException {
 
@@ -75,29 +31,44 @@ public class Main {
         else {
             String ip = args[0];
             int port = Integer.parseInt(args[1]);
-            String[] passwords = readFileAsLines("passwords.txt");
+            Guesser guesser = new Guesser(readFileAsLines("logins.txt"));
             try (
                     Socket socket = new Socket(ip, port);
                     DataInputStream input = new DataInputStream(socket.getInputStream());
                     DataOutputStream output  = new DataOutputStream(socket.getOutputStream())
             ) {
-                int passwordIndex = 0;
-                String sent = null;
-                boolean correct = false;
-                while (!correct) {
-                    if (passwordIndex == passwords.length) break;
-                    List<String> guesses = getAllCaseCombinations(passwords[passwordIndex]);
-                    for (String guess: guesses) {
-                        output.writeUTF(guess);
-                        sent = guess;
-                        String received = input.readUTF(); // read the reply from the server
-                        correct = "Connection success!".equals(received);
-                        if (correct) break;
-                    }
-                    passwordIndex++;
+                Map<String,String> sent = new HashMap<>();
+                sent.put("password", "");
+                boolean loginFound = false;
+                while (!loginFound) {
+                    String login = guesser.getNextLogin();
+                    if ("".equals(login)) break;
+                    sent.put("login", login);
+                    String JSON = convertToJSON(sent);
+                    output.writeUTF(JSON);
+                    String received = input.readUTF(); // read the reply from the server
+                    String result = convertFromJSON(received).get("result");
+                    loginFound = "Wrong password!".equals(result);
                 }
-                if (correct) System.out.println(sent);
-                else System.out.println("Could not find password");
+                if (!loginFound) System.out.println("Could not find login");
+                boolean passFound = false;
+                while (!passFound && loginFound) {
+                    String pass = guesser.getPassword();
+                    sent.put("password", pass);
+                    String JSON = convertToJSON(sent);
+                    output.writeUTF(JSON);
+                    String received = input.readUTF();
+                    String result = convertFromJSON(received).get("result");
+                    passFound = "Connection success!".equals(result);
+                    if ("Exception happened during login".equals(result)) {
+                        guesser.addNewLetter(); // right letter - start on next
+                    } else if (!passFound) {
+                        guesser.incrementCurrentLetter(); // wrong letter
+                    }
+                }
+                if (passFound) {
+                    System.out.println(convertToJSON(sent));
+                } else System.out.println("Could not find password");
 
             } catch (IOException e) {
                 e.printStackTrace();
